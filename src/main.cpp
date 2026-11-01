@@ -12,6 +12,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define dht_pin 27
 #define RELE1 4
+#define RELE2 5
 #define RED 13
 #define GREEN 12
 #define sensor 25
@@ -19,7 +20,10 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 DHT dht(dht_pin, DHT11);
 
 uint32_t last_check = 0;
+uint32_t last_activ = 0;
+uint32_t interval_rele = 10000;
 uint32_t interval = 2000;
+bool rele1_active = false;
 
 float temp = 0;
 float hum = 0;
@@ -43,6 +47,14 @@ void DHT_update(){
     temp = t;
     hum = h;
 
+    if(temp < 24.0){
+      GPIO.out_w1tc = (1UL << RELE2);
+      Serial.println("CLIMATE CONTROL ON");
+    }else{
+      GPIO.out_w1ts = (1UL << RELE2);
+      Serial.println("CLIMATE CONTROLL OFF");
+    }
+
     Serial.println("Temp:");
     Serial.println(temp);
 
@@ -57,24 +69,29 @@ void setup() {
   Serial.begin(9600); 
   
   pinMode(RELE1 , OUTPUT);
+  pinMode(RELE2 , OUTPUT);
   pinMode(sensor , INPUT);
   pinMode(RED, OUTPUT); 
   pinMode(GREEN,OUTPUT);
 
-  GPIO.out_w1ts=(1UL <<RELE1);
+  GPIO.out_w1ts=(1UL << RELE1);
+  GPIO.out_w1ts=(1UL << RELE2);
 
   setupDHT();
 
 }
 
 void loop() {
-
+  uint32_t now = millis();
   if(GPIO.in & (1UL << sensor)){
-    GPIO.out_w1tc=(1UL <<RELE1 );
-    //Serial.println("RELEAY ON");
-  }else{
-    GPIO.out_w1ts=(1UL <<RELE1);
-    //Serial.println("RELAY OFF");
+    GPIO.out_w1tc=(1UL <<RELE1 ); // ON
+      rele1_active = true;
+      last_activ = now;
+  }
+
+  if(rele1_active &(now - last_activ >= interval_rele)){ // offf
+    GPIO.out_w1ts=(1UL << RELE1);
+    rele1_active = false;
   }
 
   DHT_update();

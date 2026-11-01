@@ -1,7 +1,10 @@
 
-# 🛰️ Spacecraft-Telemetry-FSM (CubeSat-01)
-
+# 🛰️ Spacecraft-Telemetry-FSM ()
 A robust, non-blocking telemetry and life-support flight software for ESP32, written in pure C99/C++ using direct hardware register manipulation, asynchronous software timers (`millis()`), and interrupt-driven manual overrides.
+
+
+### Small mission legends:
+Mission legends: This is a prototype of an autonomous control unit for a spacecraft compartment (or a lunar lander module). The system monitors critical environmental parameters, responds automatically to emergencies, and displays telemetry on an onboard terminal.
 
 ---
 

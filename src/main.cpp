@@ -17,6 +17,9 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define RED 13
 #define GREEN 12
 #define sensor 25
+#define kill_switch 0
+#define manual_switch 26
+
 
 DHT dht(dht_pin, DHT11);
 uint32_t last_beat = 0;
@@ -24,24 +27,26 @@ uint32_t last_check = 0;
 uint32_t last_activ = 0;
 uint32_t last_send = 0;
 uint32_t last_ldr = 0;
-uint32_t green_interval = 1000;
-uint32_t interval_rele = 10000;
-uint32_t dht_interval = 2000;
-uint32_t ldr_interval = 1000;
+uint32_t last_click_switch = 0;
+volatile uint64_t last_click_iram = 0;
+const uint32_t green_interval = 1000;
+const uint32_t interval_rele = 10000;
+const uint32_t dht_interval = 2000;
+const uint32_t ldr_interval = 1000;
+const uint8_t dreb_delay = 200;
 uint32_t pack_id = 0;
 bool rele1_active = false;
 bool rele2_active = false;
+volatile bool manual = false;
 uint32_t uptime_ti = millis();
-uint8_t rele_count = 0;
 uint32_t mont_count = 0;
 uint16_t light_ldr = 0;
 uint8_t sollar_status = 0;
-
+uint8_t climat = 0;
 
 typedef struct {
     uint32_t uptime;      
     uint32_t id;
-    uint8_t  relay_status;
     uint32_t motion_count;
     uint8_t S_stat;
 } SpacecraftPacket;
@@ -59,7 +64,15 @@ void updateDisplay() {
     display.setTextColor(SSD1306_WHITE);
 
     display.setCursor(0, 0);
-    display.print(F("ST SYSTEM"));
+      
+  if(!manual){
+    display.print(F("ST SYSTEM|AUTO"));
+  }else{
+    display.print(F("ST SYSTEM|MANUAL"));
+  }
+
+    
+    
 
     display.setCursor(0, 10);
     display.print(F("Temp: "));
@@ -75,17 +88,17 @@ void updateDisplay() {
     display.print(F("SP: "));
     display.print(sollar_status); 
 
+
     display.setCursor(0, 37);
-    display.print(F("Relays: "));
-    display.print(rele_count);
-
-    display.setCursor(0, 46);
-    display.print(F("Motion: "));
+    display.print(F("Motion:  "));
     display.print(mont_count);
-
-    display.setCursor(0, 55);
+    
+    display.setCursor(0, 46);
     display.print(F("ID: "));
     display.print(pack_id);
+
+    display.setCursor(0, 55);
+    display.print(F("by DR.OPPIE"));
 
 
     display.display();
@@ -105,6 +118,10 @@ void DHT_update(){
 
     temp = t;
     hum = h;
+
+    if(manual){
+      return;
+    }
 
     if(temp < 24.0){
       GPIO.out_w1tc = (1UL << RELE2);
@@ -157,19 +174,6 @@ void relay_control(){
 
 }
 
-void relay_status() {
-    if (rele1_active && rele2_active) {
-        rele_count = 3; 
-    } 
-    else if (rele1_active) {
-        rele_count = 1;
-    } 
-    else if (rele2_active) {
-        rele_count = 2;
-    }else {
-        rele_count = 0;
-    }
-}
 
 void ldr_update(){
   uint32_t now = millis();
@@ -194,11 +198,9 @@ void telemetry_send() {
         last_send = now;
         pack_id += 1;
 
-        relay_status();
         SpacecraftPacket telemetry_packet = {
             .uptime = now / 1000,        
             .id = pack_id,
-            .relay_status = rele_count,
             .motion_count = mont_count,
             .S_stat = sollar_status
         };
@@ -208,15 +210,41 @@ void telemetry_send() {
     }
 }
 
+void IRAM_ATTR manual_switch_iram(){
+  uint64_t now = esp_timer_get_time() / 1000;
+  if(now - last_click_iram > dreb_delay){
+    last_click_iram = now;
+    manual = !manual;
+  }
+}
+
+void click(){
+  uint32_t current_time = millis();
+  if(manual &&(!(GPIO.in &(1UL << kill_switch)))){
+    if (current_time - last_click_switch > dreb_delay){
+      last_click_switch = current_time;
+      rele2_active = !rele2_active;
+
+      if(rele2_active){
+          GPIO.out_w1tc = (1UL << RELE2);
+        }else{
+          GPIO.out_w1ts = (1UL << RELE2);
+        }
+    }
+  }
+}
+
 void setup() {
   Serial.begin(9600); 
-  
+  pinMode(kill_switch, INPUT);
   pinMode(RELE1 , OUTPUT);
   pinMode(RELE2 , OUTPUT);
   pinMode(sensor , INPUT);
   pinMode(RED, OUTPUT); 
   pinMode(GREEN,OUTPUT);
   pinMode(ldr_pin,INPUT);
+  pinMode(manual_switch , INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(manual_switch), manual_switch_iram, FALLING);
 
   GPIO.out_w1ts=(1UL << RELE1);
   GPIO.out_w1ts=(1UL << RELE2);
@@ -236,6 +264,7 @@ void loop() {
   relay_control();
   DHT_update();
   ldr_update();
-  //heartbeat();
+  heartbeat();
   telemetry_send();
-}
+  click();
+}//ad astra broo! Prod by Dr.oppie 02.10.2026|01:46

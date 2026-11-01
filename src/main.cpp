@@ -10,6 +10,7 @@
 #define OLED_RESET    -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+#define ldr_pin 34
 #define dht_pin 27
 #define RELE1 4
 #define RELE2 5
@@ -18,19 +19,23 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define sensor 25
 
 DHT dht(dht_pin, DHT11);
-uint32_t green_interval = 1000;
 uint32_t last_beat = 0;
 uint32_t last_check = 0;
 uint32_t last_activ = 0;
 uint32_t last_send = 0;
+uint32_t last_ldr = 0;
+uint32_t green_interval = 1000;
 uint32_t interval_rele = 10000;
-uint32_t interval = 2000;
+uint32_t dht_interval = 2000;
+uint32_t ldr_interval = 1000;
 uint32_t pack_id = 0;
 bool rele1_active = false;
 bool rele2_active = false;
 uint32_t uptime_ti = millis();
 uint8_t rele_count = 0;
 uint32_t mont_count = 0;
+uint16_t light_ldr = 0;
+uint8_t sollar_status = 0;
 
 
 typedef struct {
@@ -38,6 +43,7 @@ typedef struct {
     uint32_t id;
     uint8_t  relay_status;
     uint32_t motion_count;
+    uint8_t S_stat;
 } SpacecraftPacket;
 
 float temp = 0;
@@ -48,41 +54,46 @@ void setupDHT() {
 }
 
 void updateDisplay() {
-    display.clearDisplay();
+        display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
     display.setCursor(0, 0);
     display.print(F("ST SYSTEM"));
 
-    display.setCursor(0, 12);
+    display.setCursor(0, 10);
     display.print(F("Temp: "));
     display.print(temp, 1);
     display.print(F("C"));
 
-    display.setCursor(0, 22);
+    display.setCursor(0, 19);
     display.print(F("Hum:  "));
     display.print(hum, 1);
     display.print(F("%"));
 
-    display.setCursor(0, 34);
+    display.setCursor(0, 28); 
+    display.print(F("SP: "));
+    display.print(sollar_status); 
+
+    display.setCursor(0, 37);
     display.print(F("Relays: "));
     display.print(rele_count);
 
-    display.setCursor(0, 44);
+    display.setCursor(0, 46);
     display.print(F("Motion: "));
     display.print(mont_count);
 
-    display.setCursor(0, 54);
+    display.setCursor(0, 55);
     display.print(F("ID: "));
     display.print(pack_id);
+
 
     display.display();
 }
 
 void DHT_update(){
   uint32_t current = millis();
-  if(current - last_check >= interval){
+  if(current - last_check >= dht_interval){
     last_check = current;
     float h = dht.readHumidity();
     float t = dht.readTemperature();
@@ -95,12 +106,12 @@ void DHT_update(){
     temp = t;
     hum = h;
 
-    if(temp < 27.0){
+    if(temp < 24.0){
       GPIO.out_w1tc = (1UL << RELE2);
       rele2_active = true;
       Serial.println("CLIMATE CONTROL ON");
       GPIO.out_w1ts = (1UL << RED);
-    }else{
+    }else if(temp > 24.0 && rele2_active) {
       GPIO.out_w1tc = (1UL << RED);
       rele2_active = false;
       GPIO.out_w1ts = (1UL << RELE2);
@@ -160,6 +171,23 @@ void relay_status() {
     }
 }
 
+void ldr_update(){
+  uint32_t now = millis();
+
+  if(now - last_ldr >= ldr_interval){
+    last_ldr = now;
+    if(GPIO.in1.val & (1UL << (ldr_pin - 32))){
+      Serial.println("SOLLAR PANNELS DEPLOYED");
+      sollar_status = 1;
+    }else{
+      Serial.println("SOLLAR PANNELS STOWED");
+      sollar_status = 0;
+    }
+    
+  }
+
+}
+
 void telemetry_send() {
     uint32_t now = millis();
     if(now - last_send >= 4000){
@@ -171,7 +199,8 @@ void telemetry_send() {
             .uptime = now / 1000,        
             .id = pack_id,
             .relay_status = rele_count,
-            .motion_count = mont_count
+            .motion_count = mont_count,
+            .S_stat = sollar_status
         };
         
         Serial.write((uint8_t*)&telemetry_packet, sizeof(telemetry_packet));
@@ -187,6 +216,7 @@ void setup() {
   pinMode(sensor , INPUT);
   pinMode(RED, OUTPUT); 
   pinMode(GREEN,OUTPUT);
+  pinMode(ldr_pin,INPUT);
 
   GPIO.out_w1ts=(1UL << RELE1);
   GPIO.out_w1ts=(1UL << RELE2);
@@ -205,7 +235,7 @@ void setup() {
 void loop() {
   relay_control();
   DHT_update();
-  heartbeat();
+  ldr_update();
+  //heartbeat();
   telemetry_send();
-  updateDisplay();
 }

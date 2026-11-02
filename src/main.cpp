@@ -119,16 +119,19 @@ void DHT_update(){
     temp = t;
     hum = h;
 
-    if(manual){
+    noInterrupts();
+    bool current_manual = manual;
+    interrupts();
+
+    if(current_manual){
       return;
     }
-
-    if(temp < 24.0){
+    if(temp < 23.5){
       GPIO.out_w1tc = (1UL << RELE2);
       rele2_active = true;
       Serial.println("CLIMATE CONTROL ON");
       GPIO.out_w1ts = (1UL << RED);
-    }else if(temp > 24.0 && rele2_active) {
+    }else if(temp > 24.5 && rele2_active) {
       GPIO.out_w1tc = (1UL << RED);
       rele2_active = false;
       GPIO.out_w1ts = (1UL << RELE2);
@@ -220,15 +223,22 @@ void IRAM_ATTR manual_switch_iram(){
 
 void click(){
   uint32_t current_time = millis();
-  if(manual &&(!(GPIO.in &(1UL << kill_switch)))){
+
+  noInterrupts();
+  bool current_manual = manual;
+  interrupts();
+
+  if(current_manual &&(!(GPIO.in &(1UL << kill_switch)))){
     if (current_time - last_click_switch > dreb_delay){
       last_click_switch = current_time;
       rele2_active = !rele2_active;
 
       if(rele2_active){
           GPIO.out_w1tc = (1UL << RELE2);
+          GPIO.out_w1ts = (1UL << RED);
         }else{
           GPIO.out_w1ts = (1UL << RELE2);
+          GPIO.out_w1tc = (1UL << RED);
         }
     }
   }

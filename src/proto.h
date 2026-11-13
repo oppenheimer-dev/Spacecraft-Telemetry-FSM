@@ -2,18 +2,50 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define Light_sensor 35
+#define DHT_pin 13
+#define Relay_one 26
+#define Relay_two 25
+#define Changer  34
+#define Button_light 27
+#define Button_warm 14
+#define Manual_mode 0
+#define DHTTYPE DHT11
+#define TEMP_THRESHOLD_LOW  23.5f
+#define TEMP_THRESHOLD_HIGH 24.5f
+// ==========================================
+// CHECK SUM
+// ==========================================
 #define SYNC_BYTE_1 0xAA
 #define SYNC_BYTE_2 0x55
 
+const uint16_t dhtInterval = 2000; 
+const uint16_t dreb_delay = 200;
+
+
+
 typedef struct __attribute__((packed)) {
-    uint8_t sync1;
-    uint8_t sync2;
-    uint32_t uptime;      
-    uint32_t id;
-    uint32_t motion_count;
-    uint8_t S_stat;
-    uint8_t checksum;
-} SpacecraftPacket;
+    uint8_t  sync1;
+    uint8_t  sync2;
+    uint8_t hum;
+    uint16_t temp;
+    uint8_t relay1;
+    uint8_t relay2;
+    uint8_t light_sensor_state;
+    uint8_t manual;
+    uint8_t check_sum;
+} TelemetryPacket;
+
+
+
+enum SystemState {
+    STATE_BOOT,//start and diagnostic
+    STATE_AUTO, // auto mode
+    STATE_MANUAL,// manual mode
+    STATE_EMERGENCY // emergency incedents
+};
+
+
 
 inline uint8_t calculate_checksum(const uint8_t *data, size_t length) {
     uint8_t crc = 0;

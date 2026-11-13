@@ -4,6 +4,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <DHT.h>
+#include <proto.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -28,12 +29,14 @@ uint32_t last_activ = 0;
 uint32_t last_send = 0;
 uint32_t last_ldr = 0;
 uint32_t last_click_switch = 0;
+uint32_t last_display_update = 0;
 volatile uint64_t last_click_iram = 0;
 const uint32_t green_interval = 1000;
 const uint32_t interval_rele = 10000;
 const uint32_t dht_interval = 2000;
 const uint32_t ldr_interval = 1000;
-const uint8_t dreb_delay = 200;
+const uint32_t display_interval = 500;
+const uint32_t dreb_delay = 200;
 uint32_t pack_id = 0;
 bool rele1_active = false;
 bool rele2_active = false;
@@ -44,12 +47,7 @@ uint16_t light_ldr = 0;
 uint8_t sollar_status = 0;
 uint8_t climat = 0;
 
-typedef struct {
-    uint32_t uptime;      
-    uint32_t id;
-    uint32_t motion_count;
-    uint8_t S_stat;
-} SpacecraftPacket;
+
 
 float temp = 0;
 float hum = 0;
@@ -163,7 +161,7 @@ void heartbeat(){
 
 void relay_control(){
   uint32_t now = millis();
-  if(GPIO.in & (1UL << sensor)&& !rele1_active){
+  if(GPIO.in && (1UL << sensor)&& !rele1_active){
     GPIO.out_w1tc=(1UL <<RELE1 ); 
       rele1_active = true;
       last_activ = now;
@@ -207,9 +205,13 @@ void telemetry_send() {
             .motion_count = mont_count,
             .S_stat = sollar_status
         };
+
+        telemetry_packet.checksum = calculate_checksum(
+            (uint8_t*)&telemetry_packet, 
+            sizeof(SpacecraftPacket) - sizeof(uint8_t)
+        );
         
         Serial.write((uint8_t*)&telemetry_packet, sizeof(telemetry_packet));
-        updateDisplay();
     }
 }
 
@@ -242,6 +244,15 @@ void click(){
         }
     }
   }
+}
+
+void display_update() {
+    uint32_t now = millis();
+    if (now - last_display_update >= display_interval) {
+        last_display_update = now;
+        
+        updateDisplay();
+    }
 }
 
 void setup() {
@@ -277,4 +288,5 @@ void loop() {
   heartbeat();
   telemetry_send();
   click();
-}//ad astra broo! Prod by Dr.oppie 02.10.2026|01:46
+  display_update();
+}//ad astra broo! Prod by Dr.oppie 

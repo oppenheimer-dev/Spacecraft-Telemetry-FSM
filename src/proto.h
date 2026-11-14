@@ -6,21 +6,23 @@
 #define DHT_pin 13
 #define Relay_one 26
 #define Relay_two 25
-#define Changer  34
 #define Button_light 27
 #define Button_warm 14
 #define Manual_mode 0
 #define DHTTYPE DHT11
 #define TEMP_THRESHOLD_LOW  23.5f
 #define TEMP_THRESHOLD_HIGH 24.5f
+#define solar 34
 // ==========================================
 // CHECK SUM
 // ==========================================
 #define SYNC_BYTE_1 0xAA
 #define SYNC_BYTE_2 0x55
+#define BLUE 2
 
 const uint16_t dhtInterval = 2000; 
 const uint16_t dreb_delay = 200;
+const uint16_t solarInterval = 2000;
 
 
 
@@ -45,6 +47,11 @@ enum SystemState {
     STATE_EMERGENCY // emergency incedents
 };
 
+enum SolarState {
+    SOLAR_STOWED,    // Сложены в обтекателе
+    SOLAR_DEPLOYING, // Идёт раскрытие приводов
+    SOLAR_DEPLOYED   // Полностью зафиксированы
+};
 
 
 inline uint8_t calculate_checksum(const uint8_t *data, size_t length) {

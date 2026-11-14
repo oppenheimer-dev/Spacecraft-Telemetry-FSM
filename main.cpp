@@ -256,7 +256,7 @@ void display_update() {
 }
 
 void setup() {
-  Serial.begin(9600); 
+  Serial.begin(921600); 
   pinMode(kill_switch, INPUT);
   pinMode(RELE1 , OUTPUT);
   pinMode(RELE2 , OUTPUT);
